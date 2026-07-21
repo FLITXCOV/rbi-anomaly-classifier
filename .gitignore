@@ -1,0 +1,23 @@
+# Python environment
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+
+# Project Data (Critical: Do not upload 100MB RBI files to GitHub)
+data/01_raw_input/*.xlsx
+data/01_raw_input/*.csv
+data/01_raw_input/*.xls
+data/02_app_output/*.xlsx
+
+# PyInstaller Build Files (If you ever compile to .exe again)
+build/
+dist/
+*.spec
+_internal/
+
+# IDE files
+.vscode/
+.idea/
