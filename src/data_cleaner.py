@@ -135,6 +135,19 @@ def load_and_merge_quarters(folder_path, log_callback=None):
             top_level['Current_Cash_Col'] = top_level['Current Amount'].astype(float).fillna(0)
             top_level['Saving_Cash_Col'] = top_level['Saving Amount'].astype(float).fillna(0)
             
+            # --- REDUNDANCY CHECK: Cross-validate against RBI's Total Amount ---
+            if 'Total Amount' in top_level.columns:
+                rbi_total = top_level['Total Amount'].astype(float).fillna(0)
+                our_total = top_level['Current_Cash_Col'] + top_level['Saving_Cash_Col'] + top_level['Term_Cash_Col']
+                mismatch = (our_total - rbi_total).abs() > 1.0  # Allow ₹1 rounding tolerance
+                mismatch_count = mismatch.sum()
+                if mismatch_count > 0:
+                    log(f"  ⚠ DATA INTEGRITY WARNING in {os.path.basename(path)}: "
+                        f"{mismatch_count} rows where Current+Saving+Term ≠ Total Amount. "
+                        f"Max deviation: ₹{(our_total - rbi_total).abs().max():,.0f}")
+                else:
+                    log(f"  ✓ Redundancy check passed for {os.path.basename(path)} — all rows match Total Amount.")
+            
             if 'Part1 Code' in top_level.columns:
                 top_level['Branch_Code'] = top_level['Part1 Code'].astype(str).str.strip()
             else:
