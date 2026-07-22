@@ -29,46 +29,47 @@ if PROJECT_ROOT not in sys.path:
 os.chdir(PROJECT_ROOT)
 
 # ==============================================================================
-#  Design Tokens
-#  Palette: deep institutional navy, restrained slate surfaces, cool signal-blue
-#  for primary actions, single warm amber accent for "attention" states.
+#  Design Tokens  v3.0 — Liquid Glass / Vibrant Violet-Indigo Palette
 # ==============================================================================
-BG          = "#090c14"
-BG2         = "#0d111c"
-SURFACE     = "#131826"
-SURFACE2    = "#1a2033"
-SURFACE3    = "#212942"
-BORDER      = "#262f48"
-BORDER_SOFT = "#1c2338"
-ACCENT      = "#5b8dee"
-ACCENT_HOVER= "#4a7bd4"
-ACCENT_DIM  = "#20304f"
-ACCENT_SOFT = "#8fb3f5"
-TEXT        = "#eef1f7"
-TEXT_SEC    = "#9aa5bd"
-TEXT_MUTED  = "#5f6a85"
-SUCCESS     = "#3ddc97"
-SUCCESS_DIM = "#0e3328"
-DANGER      = "#f76b6b"
-DANGER_DIM  = "#3a1414"
-WARNING     = "#f2b84b"
-WARNING_DIM = "#3a2a0c"
-ORANGE      = "#fb923c"
-GOLD_LINE   = "#f2b84b"
+BG          = "#07080f"   # Near-black deep space
+BG2         = "#0b0d17"   # Slightly lifted background
+SURFACE     = "#0f1220"   # Main glass surface
+SURFACE2    = "#151829"   # Raised surface
+SURFACE3    = "#1c2038"   # Hover surface
+BORDER      = "#2a2f52"   # Standard border
+BORDER_SOFT = "#1e2240"   # Soft border
+GLASS_EDGE  = "#3a3f6e"   # Bright glass highlight edge
+GLASS_INNER = "#ffffff14" # Translucent inner highlight
+ACCENT      = "#7c5cfc"   # Electric violet
+ACCENT2     = "#00d4ff"   # Cyan glow (secondary)
+ACCENT_HOVER= "#6a4de8"   # Hover violet
+ACCENT_DIM  = "#2e1f6e"   # Violet dim background
+ACCENT_SOFT = "#c4b5fd"   # Soft lavender
+TEXT        = "#f0f2ff"   # Near-white with slight blue tint
+TEXT_SEC    = "#a0a8c8"   # Muted lavender
+TEXT_MUTED  = "#545878"   # Very muted
+SUCCESS     = "#00f5a0"   # Vivid emerald
+SUCCESS_DIM = "#003d28"   # Deep emerald bg
+DANGER      = "#ff4d6d"   # Hot coral red
+DANGER_DIM  = "#3d0018"   # Deep red bg
+WARNING     = "#ffd166"   # Warm gold
+WARNING_DIM = "#3d2a00"   # Deep gold bg
+ORANGE      = "#ff8c42"   # Vivid orange
+GOLD_LINE   = "#ffd166"   # Gold accent line
 
 CAUSE_COLORS = {
-    "Current"        : "#5b8dee",
-    "Savings"        : "#3ddc97",
-    "Term"           : "#f2b84b",
-    "Systemic"       : "#9aa5bd",
-    "Data Not Found" : "#f76b6b",
+    "Current"        : "#7c5cfc",
+    "Savings"        : "#00f5a0",
+    "Term"           : "#ffd166",
+    "Systemic"       : "#a0a8c8",
+    "Data Not Found" : "#ff4d6d",
 }
 CAUSE_DIM = {
-    "Current"        : "#1c2c4a",
-    "Savings"        : "#0e3328",
-    "Term"           : "#3a2a0c",
+    "Current"        : "#2e1f6e",
+    "Savings"        : "#003d28",
+    "Term"           : "#3d2a00",
     "Systemic"       : "#242c42",
-    "Data Not Found" : "#3a1414",
+    "Data Not Found" : "#3d0018",
 }
 
 ctk.set_appearance_mode("dark")
@@ -88,6 +89,118 @@ def ease_out_back(t: float) -> float:
     c1 = 1.70158
     c3 = c1 + 1
     return 1 + c3 * pow(t - 1, 3) + c1 * pow(t - 1, 2)
+
+
+# ==============================================================================
+#  Liquid Glass Card Widget
+# ==============================================================================
+class GlassCard(ctk.CTkFrame):
+    """
+    A frame that simulates the 'liquid glass' aesthetic:
+    - Dark translucent background
+    - A bright single-pixel highlight on the top & left edge (light source)
+    - An optional colored bottom glow bar
+    - A subtle inner shimmer layer
+    """
+    def __init__(self, parent, glow_color=None, **kwargs):
+        # Default glass styling
+        kwargs.setdefault('fg_color', SURFACE)
+        kwargs.setdefault('corner_radius', 18)
+        kwargs.setdefault('border_width', 1)
+        kwargs.setdefault('border_color', GLASS_EDGE)
+        super().__init__(parent, **kwargs)
+        self._glow = glow_color
+        # Top highlight strip (light source illusion)
+        self._highlight = tk.Canvas(
+            self, height=1, bg=GLASS_EDGE,
+            highlightthickness=0, bd=0)
+        self._highlight.place(relx=0.04, rely=0, relwidth=0.92, height=1)
+        # Bottom glow bar
+        if glow_color:
+            self._glow_bar = ctk.CTkFrame(
+                self, fg_color=glow_color, height=3, corner_radius=0)
+            self._glow_bar.pack(fill="x", side="bottom", padx=0, pady=0)
+
+
+# ==============================================================================
+#  Animated Shimmer Header Canvas
+# ==============================================================================
+class ShimmerCanvas(tk.Canvas):
+    """A canvas that draws an animated gradient shimmer sweep across the header."""
+    def __init__(self, parent, height=66, **kwargs):
+        super().__init__(parent, height=height, highlightthickness=0,
+                         bd=0, **kwargs)
+        self._offset = 0
+        self._colors = [
+            ("#0f1220", 0.0),
+            ("#1c1650", 0.3),
+            ("#7c5cfc", 0.42),
+            ("#00d4ff", 0.52),
+            ("#7c5cfc", 0.62),
+            ("#1c1650", 0.7),
+            ("#0f1220", 1.0),
+        ]
+        self.bind("<Configure>", self._on_resize)
+        self._width = 1440
+        self._height = height
+        self._animate()
+
+    def _on_resize(self, event):
+        self._width = event.width
+        self._height = event.height
+        self._draw()
+
+    def _lerp_color(self, c1, c2, t):
+        c1 = c1.lstrip('#')
+        c2 = c2.lstrip('#')
+        r1,g1,b1 = int(c1[0:2],16),int(c1[2:4],16),int(c1[4:6],16)
+        r2,g2,b2 = int(c2[0:2],16),int(c2[2:4],16),int(c2[4:6],16)
+        r = int(r1+(r2-r1)*t)
+        g = int(g1+(g2-g1)*t)
+        b = int(b1+(b2-b1)*t)
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def _draw(self):
+        self.delete("all")
+        w, h = self._width, self._height
+        # Draw base
+        self.create_rectangle(0, 0, w, h, fill="#0f1220", outline="")
+        # Draw shimmer stripe — 40% width sweep
+        sw = int(w * 0.45)
+        cx = int((self._offset % (w + sw)) - sw//2)
+        steps = 80
+        for i in range(steps):
+            t = i / steps
+            # Map t 0->1 across the stripe width
+            # Peak brightness at center
+            peak = 1 - abs(2*t - 1)
+            peak = peak ** 1.8  # sharpen
+            base = "#0f1220"
+            glow = "#7c5cfc" if t < 0.5 else "#00d4ff"
+            color = self._lerp_color(base, glow, peak * 0.4)
+            x0 = cx + int(t * sw)
+            x1 = cx + int((t + 1/steps) * sw) + 1
+            self.create_rectangle(x0, 0, x1, h, fill=color, outline="")
+        # Bottom accent rule: violet to cyan
+        rule_steps = 60
+        for i in range(rule_steps):
+            t = i / rule_steps
+            color = self._lerp_color(ACCENT, ACCENT2, t)
+            x0 = int(t * w)
+            x1 = int((t + 1/rule_steps) * w) + 1
+            self.create_rectangle(x0, h-2, x1, h, fill=color, outline="")
+        # Glass inner highlight line at top
+        self.create_rectangle(0, 0, w, 1, fill=GLASS_EDGE, outline="")
+
+    def _animate(self):
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
+        self._offset += 3
+        self._draw()
+        self.after(20, self._animate)
 
 
 # ==============================================================================
@@ -341,83 +454,83 @@ class App(ctk.CTk):
     #  HEADER
     # ------------------------------------------------------------------
     def _build_header(self):
-        hdr = ctk.CTkFrame(self, fg_color=SURFACE, corner_radius=0, height=64)
-        hdr.pack(fill="x", side="top")
-        hdr.pack_propagate(False)
+        # --- Animated Shimmer Canvas as the header background ---
+        hdr_outer = tk.Frame(self, height=66, bg="#0f1220")
+        hdr_outer.pack(fill="x", side="top")
+        hdr_outer.pack_propagate(False)
 
-        inner = ctk.CTkFrame(hdr, fg_color="transparent")
-        inner.pack(fill="both", expand=True, padx=32)
+        self._shimmer = ShimmerCanvas(hdr_outer, height=66, bg="#0f1220")
+        self._shimmer.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        # Overlay inner frame (transparent so shimmer shows through)
+        inner = tk.Frame(hdr_outer, bg="#0f1220", bd=0)
+        inner.place(relx=0, rely=0, relwidth=1, relheight=1)
 
         # Left: monogram + wordmark
-        left = ctk.CTkFrame(inner, fg_color="transparent")
-        left.pack(side="left", fill="y")
+        left = tk.Frame(inner, bg="#0f1220")
+        left.pack(side="left", fill="y", padx=32)
 
-        mark = ctk.CTkFrame(left, fg_color=ACCENT_DIM, corner_radius=8,
-                             width=34, height=34)
-        mark.pack(side="left", pady=15)
-        mark.pack_propagate(False)
-        ctk.CTkLabel(mark, text="RBI", font=ctk.CTkFont(FONT, 10, "bold"),
-                     text_color=ACCENT_SOFT).pack(expand=True)
+        # Glowing RBI monogram badge
+        mark_canvas = tk.Canvas(left, width=40, height=40, bg="#0f1220",
+                                highlightthickness=0, bd=0)
+        mark_canvas.pack(side="left", pady=13)
+        mark_canvas.create_oval(2, 2, 38, 38, fill=ACCENT_DIM, outline=ACCENT, width=1.5)
+        mark_canvas.create_text(20, 20, text="RBI", fill=ACCENT_SOFT,
+                                font=(FONT, 9, "bold"))
 
-        title_block = ctk.CTkFrame(left, fg_color="transparent")
-        title_block.pack(side="left", padx=(12, 0))
-        ctk.CTkLabel(
+        title_block = tk.Frame(left, bg="#0f1220")
+        title_block.pack(side="left", padx=(10, 0))
+        tk.Label(
             title_block, text="Anomaly Classifier",
-            font=ctk.CTkFont(FONT, 18, "bold"), text_color=TEXT
-        ).pack(anchor="w", pady=(13, 0))
-        ctk.CTkLabel(
+            font=(FONT, 17, "bold"), bg="#0f1220", fg=TEXT
+        ).pack(anchor="w", pady=(14, 0))
+        tk.Label(
             title_block, text="BSR 2 Branch Data  \u00b7  Statistical Review",
-            font=ctk.CTkFont(FONT, 10), text_color=TEXT_MUTED
+            font=(FONT, 10), bg="#0f1220", fg=TEXT_MUTED
         ).pack(anchor="w")
 
         # Version badge
-        badge = ctk.CTkFrame(left, fg_color=SURFACE2, corner_radius=6,
-                              border_width=1, border_color=BORDER)
-        badge.pack(side="left", padx=16, pady=22)
-        ctk.CTkLabel(badge, text="v2.0", font=ctk.CTkFont(MONO, 10, "bold"),
-                     text_color=ACCENT_SOFT).pack(padx=9, pady=2)
+        badge_frame = tk.Frame(left, bg=SURFACE2, bd=0,
+                               highlightbackground=GLASS_EDGE, highlightthickness=1)
+        badge_frame.pack(side="left", padx=14, pady=22)
+        tk.Label(badge_frame, text="v3.0", font=(MONO, 9, "bold"),
+                 bg=SURFACE2, fg=ACCENT_SOFT).pack(padx=8, pady=2)
 
         # Step indicator: Data > Engine > Results
-        step_frame = ctk.CTkFrame(left, fg_color="transparent")
-        step_frame.pack(side="left", padx=(20, 0), pady=22)
+        step_frame = tk.Frame(left, bg="#0f1220")
+        step_frame.pack(side="left", padx=(18, 0), pady=24)
         step_labels = ["Data", "Engine", "Results"]
         for i in range(3):
-            dot_frame = ctk.CTkFrame(step_frame, fg_color="transparent")
-            dot_frame.pack(side="left", padx=(0, 4))
+            dot_frame = tk.Frame(step_frame, bg="#0f1220")
+            dot_frame.pack(side="left", padx=(0, 2))
             dot = ctk.CTkLabel(dot_frame, text="\u25cf", font=ctk.CTkFont(FONT, 8),
-                               text_color=ACCENT if i == 0 else TEXT_MUTED)
-            dot.pack(side="left", padx=(0, 3))
+                               text_color=ACCENT if i == 0 else TEXT_MUTED,
+                               bg_color="#0f1220")
+            dot.pack(side="left", padx=(0, 2))
             lbl = ctk.CTkLabel(dot_frame, text=step_labels[i],
                                font=ctk.CTkFont(FONT, 9),
-                               text_color=TEXT_SEC if i == 0 else TEXT_MUTED)
+                               text_color=TEXT_SEC if i == 0 else TEXT_MUTED,
+                               bg_color="#0f1220")
             lbl.pack(side="left")
             self._step_dots.append((dot, lbl))
             if i < 2:
                 ctk.CTkLabel(step_frame, text="\u2014",
                              font=ctk.CTkFont(FONT, 8),
-                             text_color=BORDER).pack(side="left", padx=(0, 4))
+                             text_color=BORDER, bg_color="#0f1220").pack(side="left", padx=(0, 2))
 
         # Right: offline chip
-        right = ctk.CTkFrame(inner, fg_color="transparent")
-        right.pack(side="right", pady=15)
+        right = tk.Frame(inner, bg="#0f1220")
+        right.pack(side="right", pady=16, padx=32)
 
-        chip = ctk.CTkFrame(right, fg_color=SUCCESS_DIM, corner_radius=14)
+        chip = tk.Frame(right, bg=SUCCESS_DIM,
+                        highlightbackground=SUCCESS, highlightthickness=1)
         chip.pack(side="right")
-        ctk.CTkLabel(chip, text="\u25cf", font=ctk.CTkFont(FONT, 9),
-                     text_color=SUCCESS).pack(side="left", padx=(10, 4), pady=5)
-        ctk.CTkLabel(chip, text="Offline \u00b7 Local Only",
-                     font=ctk.CTkFont(FONT, 10, "bold"),
-                     text_color=SUCCESS).pack(side="left", padx=(0, 10), pady=5)
-        ctk.CTkLabel(right, text="Tier 1 + Tier 2 Engine",
-                     font=ctk.CTkFont(FONT, 11),
-                     text_color=TEXT_MUTED).pack(side="right", padx=(0, 16))
-
-        # Signature dual-tone rule
-        rule = ctk.CTkFrame(self, fg_color=ACCENT, height=2, corner_radius=0)
-        rule.pack(fill="x")
-        ember = ctk.CTkFrame(rule, fg_color=GOLD_LINE, height=2, width=110,
-                              corner_radius=0)
-        ember.place(relx=0, rely=0, anchor="nw")
+        tk.Label(chip, text="\u25cf  Offline \u00b7 Local Only",
+                 font=(FONT, 10, "bold"),
+                 bg=SUCCESS_DIM, fg=SUCCESS).pack(padx=10, pady=5)
+        tk.Label(right, text="Tier 1 + Tier 2 Engine",
+                 font=(FONT, 11),
+                 bg="#0f1220", fg=TEXT_MUTED).pack(side="right", padx=(0, 14))
 
     def _update_step(self, step_num):
         """Update the 3-dot step indicator (1-indexed)."""
@@ -973,24 +1086,26 @@ class App(ctk.CTk):
         self._kpi_cards = []
         count_labels = []
         for i, (label, target, fmt, color, dim) in enumerate(numeric_kpis):
-            shadow = ctk.CTkFrame(kpi_row, fg_color=BG2, corner_radius=16)
-            shadow.grid(row=0, column=i, padx=5, pady=4, sticky="nsew")
-            card = ctk.CTkFrame(shadow, fg_color=SURFACE, corner_radius=14,
-                                border_width=1, border_color=BORDER)
-            card.pack(fill="both", expand=True, padx=1, pady=(0, 2))
+            # Outer glow frame — colored shadow effect
+            glow_frame = ctk.CTkFrame(kpi_row, fg_color=dim, corner_radius=18)
+            glow_frame.grid(row=0, column=i, padx=5, pady=4, sticky="nsew")
+            # Glass card with bright highlighted border matching the KPI color
+            card = GlassCard(glow_frame, glow_color=color,
+                             border_color=color, corner_radius=16)
+            card.pack(fill="both", expand=True, padx=2, pady=(0, 3))
             self._kpi_cards.append(card)
-            ctk.CTkFrame(card, fg_color=dim, height=4,
-                         corner_radius=0).pack(fill="x", side="top")
+            # Icon
             ctk.CTkLabel(card, text=kpi_icons[i],
-                         font=ctk.CTkFont(FONT, 14),
-                         text_color=TEXT_MUTED).pack(padx=16, pady=(12, 0))
+                         font=ctk.CTkFont(FONT, 18),
+                         text_color=color).pack(padx=16, pady=(14, 0))
+            # Animated count value
             vl = CountUpLabel(card, target_value=target, formatter=fmt,
-                              font=ctk.CTkFont(FONT, 22, "bold"),
+                              font=ctk.CTkFont(FONT_DISP, 26, "bold"),
                               text_color=color)
             vl.pack(padx=16, pady=(4, 2))
             count_labels.append(vl)
             ctk.CTkLabel(card, text=label, font=ctk.CTkFont(FONT, 11),
-                         text_color=TEXT_MUTED).pack(padx=16, pady=(0, 14))
+                         text_color=TEXT_SEC).pack(padx=16, pady=(0, 14))
 
         # Fifth card: Top Root Cause
         tc_color = CAUSE_COLORS.get(top_cause, TEXT)
