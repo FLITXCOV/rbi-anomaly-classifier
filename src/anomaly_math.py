@@ -220,8 +220,9 @@ def run_tier2_engine(flagged_df, raw_df, quarter_cols):
     target_col = quarter_cols[-1]
 
     # --- Step 1: Extract account-type-level data from raw ledger ---
-    # Filter for '6. TOTAL' rows only (same filter as data_cleaner.py)
-    wide = raw_df[raw_df['Item Desc'].astype(str).str.contains('6. TOTAL', case=False, na=False)].copy()
+    # Data is already pre-aggregated by data_cleaner.py (each row is a branch total).
+    # No need to filter for '6. TOTAL' — every row is already a total.
+    wide = raw_df.copy()
     wide['Period End Date'] = pd.to_datetime(wide['Period End Date']).dt.strftime('%Y-%m-%d')
     wide['Branch_Code'] = wide['Part1 Code'].astype(str).str.strip()
 
@@ -267,33 +268,30 @@ def run_tier2_engine(flagged_df, raw_df, quarter_cols):
     # Combine all account-type pivots into one wide DataFrame
     account_wide = pd.concat(pivot_frames.values(), axis=1).fillna(0)
 
-    # --- Step 4: Diagnose each flagged branch ---
-    root_causes = []
-    directions = []
-    diagnosed_count = 0
-    not_found_count = 0
+    # --- Step 4: Diagnose each flagged branch (VECTORIZED for speed) ---
+    # Merge account data onto flagged_df first, then apply diagnosis in bulk
+    flagged_with_accounts = flagged_df.merge(account_wide, on='Branch_Code', how='left')
+    
+    def _diagnose_row(row):
+        """Wrapper for vectorized apply()."""
+        branch_code = str(row.get('Branch_Code', ''))
+        # Check if any account data exists for this branch
+        sample_col = f'Current_{target_col}'
+        if pd.isna(row.get(sample_col, np.nan)):
+            return pd.Series({'Root_Cause': 'Data Not Found', 'Direction': 'N/A'})
+        label, direction, _ = _diagnose_one_branch(row, history_cols, target_col)
+        return pd.Series({'Root_Cause': label, 'Direction': direction})
+    
+    print(f"  Diagnosing {len(flagged_with_accounts)} branches...")
+    diag_results = flagged_with_accounts.apply(_diagnose_row, axis=1)
+    flagged_with_accounts['Root_Cause'] = diag_results['Root_Cause']
+    flagged_with_accounts['Direction'] = diag_results['Direction']
+    
+    diagnosed_count = (flagged_with_accounts['Root_Cause'] != 'Data Not Found').sum()
+    not_found_count = (flagged_with_accounts['Root_Cause'] == 'Data Not Found').sum()
 
-    for _, flag_row in flagged_df.iterrows():
-        branch_code = str(flag_row['Branch_Code'])
-        if branch_code not in account_wide.index:
-            root_causes.append("Data Not Found")
-            directions.append("N/A")
-            not_found_count += 1
-            continue
-        branch_data = account_wide.loc[branch_code]
-        label, direction, _ = _diagnose_one_branch(branch_data, history_cols, target_col)
-        root_causes.append(label)
-        directions.append(direction)
-        diagnosed_count += 1
-
-    # --- Step 5: Attach root cause and direction to the flagged DataFrame ---
-    result_df = flagged_df.copy()
-    result_df['Root_Cause'] = root_causes
-    result_df['Direction'] = directions
-
-    # Merge the raw account data (Current, Savings, Term across all quarters) onto the final output
-    # account_wide's index is Branch_Code, so we merge on that
-    result_df = result_df.merge(account_wide, on='Branch_Code', how='left')
+    # --- Step 5: Result is already assembled from the merge above ---
+    result_df = flagged_with_accounts.copy()
 
     # --- Step 6: Attach Geographical & Institutional Metadata ---
     # The new raw data format contains rich metadata. We extract it once per branch and staple it to the output.

@@ -17,12 +17,11 @@ def load_and_merge_quarters(folder_path, log_callback=None):
     log("\n--- INITIATING DATA CLEANER (MULTI-QUARTER MODE) ---")
     pd.options.mode.chained_assignment = None
 
-    search_pattern = os.path.join(folder_path, "*.xls*")
     excel_files = glob.glob(os.path.join(folder_path, "*.xls*")) + glob.glob(os.path.join(folder_path, "*.csv"))
     
     if not excel_files:
         log("ERROR: No valid data files (*.xlsx or *.csv) found in the input folder.")
-        return None, None
+        return None, None, None
 
     log(f"Found {len(excel_files)} Excel files. Scanning dates...")
 
@@ -67,7 +66,7 @@ def load_and_merge_quarters(folder_path, log_callback=None):
 
     if not file_date_map:
         log("ERROR: Could not find valid 'Period End Date' in any files.")
-        return None, None
+        return None, None, None
 
     # Sort files by date descending (newest first)
     file_date_map.sort(key=lambda x: x['date'], reverse=True)
@@ -82,7 +81,7 @@ def load_and_merge_quarters(folder_path, log_callback=None):
         # However, the strict requirement is 5.
         if len(selected_files) < 2:
              log("ERROR: Not enough quarters to perform analysis.")
-             return None, None
+             return None, None, None
 
     log(f"Selected {len(selected_files)} most recent quarters for analysis:")
     for sf in selected_files:
@@ -183,7 +182,7 @@ def load_and_merge_quarters(folder_path, log_callback=None):
 
     if not all_totals:
         log("ERROR: Failed to extract top-level aggregated data from files.")
-        return None, None
+        return None, None, None
 
     merged_totals = pd.concat(all_totals, ignore_index=True)
     
@@ -195,7 +194,8 @@ def load_and_merge_quarters(folder_path, log_callback=None):
         aggfunc='sum'
     ).reset_index().set_index('Branch_Code')
     
-    dynamic_quarter_cols = sorted(clean_df.columns.tolist())
+    # Pop_Group is a text column — exclude it from the numeric quarter list
+    dynamic_quarter_cols = sorted([c for c in clean_df.columns.tolist() if c != 'Pop_Group'])
     
     # Final cleanup: drop branches that don't have the target quarter (Q5)
     # The math engine assumes target_col exists
