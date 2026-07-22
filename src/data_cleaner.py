@@ -90,6 +90,7 @@ def load_and_merge_quarters(folder_path, log_callback=None):
 
     # --- Step 2: Load and Merge ---
     all_totals = []
+    raw_dfs = []   # Collects aggregated branch data for Tier 2 diagnostics
     
     for sf in selected_files:
         path = sf['path']
@@ -196,22 +197,10 @@ def load_and_merge_quarters(folder_path, log_callback=None):
     
     log(f"Cleaned data successfully: {len(clean_df)} unique branches prepared.")
     
-    # We also need to return the raw data mappings for Tier 2. 
-    # Since Tier 2 needs account-level breakdowns, we need a way to pass the merged raw data back.
-    # To keep things simple without breaking main.py, we can re-read and merge the full raw data 
-    # for just the selected files, or do it inside the cleaner.
-    
-    # Let's just merge all raw data for the selected files and return it so Tier 2 has it.
     log("Assembling combined raw dataset for Tier 2 diagnostics...")
-    raw_dfs = []
-    for sf in selected_files:
-        df = pd.read_excel(sf['path'])
-        if 'Period End Date' not in df.columns:
-            df = pd.read_excel(sf['path'], skiprows=1)
-        df.columns = df.columns.astype(str).str.strip()
-        df['Period End Date'] = pd.to_datetime(df['Period End Date']).dt.strftime('%Y-%m-%d')
-        raw_dfs.append(df)
-        
-    combined_raw_df = pd.concat(raw_dfs, ignore_index=True)
+    if raw_dfs:
+        combined_raw_df = pd.concat(raw_dfs, ignore_index=True)
+    else:
+        combined_raw_df = pd.DataFrame()
     
     return clean_df, dynamic_quarter_cols, combined_raw_df
