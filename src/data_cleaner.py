@@ -150,11 +150,18 @@ def load_and_merge_quarters(folder_path, log_callback=None):
                 top_level['Pop_Group'] = 'Unknown'
                 
             # 3. Aggregate to branch level
-            branch_totals = top_level.groupby(['Branch_Code', 'Pop_Group', 'Period End Date'], as_index=False).agg({
+            agg_funcs = {
                 'Current_Cash_Col': 'sum',
                 'Saving_Cash_Col': 'sum',
                 'Term_Cash_Col': 'sum'
-            })
+            }
+            # Preserve metadata for Tier 2 reporting
+            meta_cols = ['Bank Group Name', 'Bank Name', 'Region', 'State', 'District', 'Centre', 'Population Group Name']
+            for c in meta_cols:
+                if c in top_level.columns:
+                    agg_funcs[c] = 'first'
+                    
+            branch_totals = top_level.groupby(['Branch_Code', 'Pop_Group', 'Period End Date'], as_index=False).agg(agg_funcs)
             
             branch_totals['Total_Cash'] = branch_totals['Current_Cash_Col'] + branch_totals['Saving_Cash_Col'] + branch_totals['Term_Cash_Col']
             
