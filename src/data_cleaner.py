@@ -107,55 +107,74 @@ def load_and_merge_quarters(folder_path, log_callback=None):
                 
             df.columns = df.columns.astype(str).str.strip()
             
-            # Filter for Total rows
-            totals_only = df[df['Item Desc'].astype(str).str.contains('6. TOTAL', case=False, na=False)].copy()
+            # ---------------------------------------------------------
+            # REAL DATA AGGREGATION ENGINE
+            # The real RBI data does not have a pre-calculated '6. TOTAL' row.
+            # We must filter for the top-level sector codes (100, 200, 300, 400, 500)
+            # and aggregate them to create a total branch row, avoiding sub-categories.
+            # ---------------------------------------------------------
             
-            if totals_only.empty:
+            # 1. Filter top-level items
+            df['Item Code'] = pd.to_numeric(df['Item Code'], errors='coerce')
+            top_level = df[df['Item Code'].isin([100, 200, 300, 400, 500])].copy()
+            
+            if top_level.empty:
                 continue
                 
-            totals_only['Period End Date'] = pd.to_datetime(totals_only['Period End Date']).dt.strftime('%Y-%m-%d')
+            # 2. Extract standard columns safely
+            top_level['Period End Date'] = pd.to_datetime(top_level['Period End Date']).dt.strftime('%Y-%m-%d')
             
-            # --- Extract absolute cash using new-format column names ---
-            # New format: Term Amount is a single pre-merged column
-            # Legacy fallback: Term CD + Term Other (two cols)
-            if 'Term Amount' in totals_only.columns:
-                term_cash = totals_only['Term Amount'].astype(float).fillna(0)
-            elif 'Term CD' in totals_only.columns and 'Term Other' in totals_only.columns:
-                term_cash = (totals_only['Term CD'].astype(float).fillna(0) +
-                             totals_only['Term Other'].astype(float).fillna(0))
+            if 'Term Amount' in top_level.columns:
+                top_level['Term_Cash_Col'] = top_level['Term Amount'].astype(float).fillna(0)
+            elif 'Term CD' in top_level.columns and 'Term Other' in top_level.columns:
+                top_level['Term_Cash_Col'] = (top_level['Term CD'].astype(float).fillna(0) +
+                                              top_level['Term Other'].astype(float).fillna(0))
             else:
-                log(f"WARNING: No Term columns found in {os.path.basename(path)}. Defaulting to 0.")
-                term_cash = 0.0
+                top_level['Term_Cash_Col'] = 0.0
 
-            # 'Current Amount', 'Saving Amount' (no 's') confirmed per new RBI BSR 2 format
-            totals_only['Total_Cash'] = (
-                totals_only['Current Amount'].astype(float).fillna(0) +
-                totals_only['Saving Amount'].astype(float).fillna(0) +
-                term_cash
-            )
+            top_level['Current_Cash_Col'] = top_level['Current Amount'].astype(float).fillna(0)
+            top_level['Saving_Cash_Col'] = top_level['Saving Amount'].astype(float).fillna(0)
             
-            # Standardize branch codes
-            if 'Part1 Code' in totals_only.columns:
-                totals_only['Branch_Code'] = totals_only['Part1 Code'].astype(str).str.strip()
+            if 'Part1 Code' in top_level.columns:
+                top_level['Branch_Code'] = top_level['Part1 Code'].astype(str).str.strip()
             else:
                 log(f"ERROR: Could not find 'Part1 Code' column in {os.path.basename(path)}")
                 continue
                 
-            # Extract Population Group Name safely (Fallback to Bank Group Name or 'Unknown')
-            if 'Population Group Name' in totals_only.columns:
-                totals_only['Pop_Group'] = totals_only['Population Group Name'].astype(str).str.strip()
-            elif 'Bank Group Name' in totals_only.columns:
-                totals_only['Pop_Group'] = totals_only['Bank Group Name'].astype(str).str.strip()
+            if 'Population Group Name' in top_level.columns:
+                top_level['Pop_Group'] = top_level['Population Group Name'].astype(str).str.strip()
+            elif 'Bank Group Name' in top_level.columns:
+                top_level['Pop_Group'] = top_level['Bank Group Name'].astype(str).str.strip()
             else:
-                totals_only['Pop_Group'] = 'Unknown'
-
-            all_totals.append(totals_only[['Branch_Code', 'Pop_Group', 'Period End Date', 'Total_Cash']])
+                top_level['Pop_Group'] = 'Unknown'
+                
+            # 3. Aggregate to branch level
+            branch_totals = top_level.groupby(['Branch_Code', 'Pop_Group', 'Period End Date'], as_index=False).agg({
+                'Current_Cash_Col': 'sum',
+                'Saving_Cash_Col': 'sum',
+                'Term_Cash_Col': 'sum'
+            })
+            
+            branch_totals['Total_Cash'] = branch_totals['Current_Cash_Col'] + branch_totals['Saving_Cash_Col'] + branch_totals['Term_Cash_Col']
+            
+            # For Tier 2 compatibility, we map the aggregated columns back to what Tier 2 expects:
+            branch_totals['Item Desc'] = '6. TOTAL'
+            branch_totals['Part1 Code'] = branch_totals['Branch_Code']
+            branch_totals['Current Amount'] = branch_totals['Current_Cash_Col']
+            branch_totals['Saving Amount'] = branch_totals['Saving_Cash_Col']
+            branch_totals['Term Amount'] = branch_totals['Term_Cash_Col']
+            
+            all_totals.append(branch_totals[['Branch_Code', 'Pop_Group', 'Period End Date', 'Total_Cash']])
+            raw_dfs.append(branch_totals) # Pass the aggregated branch_totals to Tier 2
+            
+            # Memory Management
+            del df
             
         except Exception as e:
             log(f"ERROR loading {os.path.basename(path)}: {str(e)}")
 
     if not all_totals:
-        log("ERROR: Failed to extract '6. TOTAL' data from files.")
+        log("ERROR: Failed to extract top-level aggregated data from files.")
         return None, None
 
     merged_totals = pd.concat(all_totals, ignore_index=True)
