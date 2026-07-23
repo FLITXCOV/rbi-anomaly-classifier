@@ -1350,7 +1350,13 @@ class App(ctk.CTk):
         return _fig_to_ctk_image(fig, 420, 340)
 
     def _render_bar(self, df):
-        pg = df['Peer_Group'].value_counts().sort_index()
+        # Aggregate by bucket number (0-9) so we only have 10 neat bars
+        # ignoring the METROPOLITAN/URBAN/etc. prefix for this high-level chart
+        bucket_nums = df['Peer_Group'].astype(str).apply(
+            lambda x: x.split('_Bucket_')[-1] if '_Bucket_' in x else 'Other'
+        )
+        pg = bucket_nums.value_counts().sort_index()
+        
         fig, ax = plt.subplots(figsize=(6, 3.6), facecolor=SURFACE)
         ax.set_facecolor(SURFACE)
         x_pos = range(len(pg))
@@ -1416,7 +1422,8 @@ class App(ctk.CTk):
         if peer != "All Peers":
             if peer.startswith("Group "):
                 grp = peer.split(" ")[1]
-                dff = dff[dff['Peer_Group'].astype(str) == grp]
+                # Match any population bucket (e.g. METROPOLITAN_Bucket_9 ends with _Bucket_9)
+                dff = dff[dff['Peer_Group'].astype(str).str.endswith(f"_Bucket_{grp}")]
             else:
                 dff = dff[dff['Peer_Group'].astype(str) == peer]
         if dirn == "Surge Only":

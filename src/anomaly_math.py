@@ -31,8 +31,8 @@ def _assign_peer_groups(df):
             peer_group_series.loc[subset.index] = f"{pop_group}_All"
             continue
             
-        try:
-            size_labels = pd.qcut(subset['Mean_Share'], q=N_SIZE_BUCKETS, labels=False, duplicates='drop')
+            # Stratify into buckets based on median historical size (Clean_Share)
+            size_labels = pd.qcut(subset['Clean_Share'], q=N_SIZE_BUCKETS, labels=False, duplicates='drop')
             hybrid_labels = pop_group + "_Bucket_" + size_labels.astype(str)
             peer_group_series.loc[subset.index] = hybrid_labels
         except Exception:
@@ -88,10 +88,12 @@ def run_tier1_engine(df, quarter_cols):
     history_cols = quarter_cols[:-1]
     target_col = quarter_cols[-1]
 
-    # Calculate Deltas
-    type1_df['Mean_Share'] = shares_df[history_cols].mean(axis=1)
+    # 3. Calculate the Robust Historical Baseline (MEDIAN, not Mean)
+    type1_df['Clean_Share'] = shares_df[history_cols].median(axis=1)
     type1_df['Target_Share'] = shares_df[target_col]
-    type1_df['Share_Shift'] = (type1_df['Target_Share'] - type1_df['Mean_Share']).abs()
+    
+    # 4. Calculate Absolute Shift
+    type1_df['Share_Shift'] = (type1_df['Target_Share'] - type1_df['Clean_Share']).abs()
 
     # Assign Peer Groups
     type1_df['Peer_Group'] = _assign_peer_groups(type1_df)
