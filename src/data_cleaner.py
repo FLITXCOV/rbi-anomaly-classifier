@@ -61,7 +61,7 @@ def load_and_merge_quarters(folder_path, log_callback=None):
                     'date': parsed_date
                 })
         except Exception as e:
-            log(f"WARNING: Could not parse date from {os.path.basename(file_path)}. Skipping.")
+            log(f"WARNING: Could not parse date from {os.path.basename(file_path)} — skipping. Reason: {e}")
             continue
 
     if not file_date_map:

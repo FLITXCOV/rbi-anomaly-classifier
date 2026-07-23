@@ -742,13 +742,9 @@ class App(ctk.CTk):
                         'size_mb': os.path.getsize(fp) / 1_048_576,
                         'valid': False,
                     })
-            except Exception:
-                file_info.append({
-                    'name': os.path.basename(fp), 'date': None,
-                    'date_label': '\u2014',
-                    'size_mb': os.path.getsize(fp) / 1_048_576,
-                    'valid': False,
-                })
+            except Exception as e:
+                self._append_log(f"WARNING: Could not parse {os.path.basename(fp)} — skipping. Reason: {e}")
+                continue
 
         file_info.sort(
             key=lambda x: (not x['valid'],
@@ -818,9 +814,6 @@ class App(ctk.CTk):
                 ctk.CTkLabel(db, text=fi['date_label'],
                              font=ctk.CTkFont(MONO, 9, "bold"),
                              text_color=ACCENT_SOFT).pack(padx=6, pady=1)
-            ctk.CTkLabel(row, text=f"{fi['size_mb']:.1f} MB",
-                         font=ctk.CTkFont(MONO, 9),
-                         text_color=TEXT_MUTED).pack(side="right")
 
     def _start_run(self):
         self._show_processing_screen()
@@ -872,13 +865,13 @@ class App(ctk.CTk):
             font=ctk.CTkFont(FONT, 11), text_color=TEXT_MUTED)
         self._phase_label.pack(anchor="w", pady=(4, 0))
 
-        # Progress bar
-        track = ctk.CTkFrame(pad, fg_color=SURFACE2, corner_radius=3, height=6)
-        track.pack(fill="x", pady=(12, 0))
+        # Progress bar — tall and prominent so it's easy to see
+        track = ctk.CTkFrame(pad, fg_color=SURFACE2, corner_radius=6, height=18)
+        track.pack(fill="x", pady=(16, 0))
         track.pack_propagate(False)
         self._progress = ctk.CTkProgressBar(
-            track, height=6, fg_color=SURFACE2, progress_color=ACCENT,
-            corner_radius=3)
+            track, height=18, fg_color=SURFACE2, progress_color=ACCENT,
+            corner_radius=6)
         self._progress.pack(fill="both", expand=True)
         self._progress.set(0)
         self._progress.start()
