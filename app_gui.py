@@ -697,15 +697,30 @@ class App(ctk.CTk):
         for fp in files:
             try:
                 is_csv = fp.lower().endswith('.csv')
-                if is_csv:
-                    df_peek = pd.read_csv(fp, nrows=20)
-                    if 'Period End Date' not in df_peek.columns:
-                        df_peek = pd.read_csv(fp, skiprows=1, nrows=20)
-                else:
-                    df_peek = pd.read_excel(fp, nrows=20)
-                    if 'Period End Date' not in df_peek.columns:
-                        df_peek = pd.read_excel(fp, skiprows=1, nrows=20)
-                        
+                # Try multiple skiprows values (0–4) to handle files with
+                # blank/metadata rows before the real column headers.
+                df_peek = None
+                for _skip in range(5):
+                    try:
+                        if is_csv:
+                            _df = pd.read_csv(fp, skiprows=_skip, nrows=20)
+                        else:
+                            _df = pd.read_excel(fp, skiprows=_skip, nrows=20)
+                        if any('Period End Date' in str(c) for c in _df.columns):
+                            df_peek = _df
+                            break
+                    except Exception:
+                        continue
+
+                if df_peek is None:
+                    file_info.append({
+                        'name': os.path.basename(fp), 'date': None,
+                        'date_label': '\u2014',
+                        'size_mb': os.path.getsize(fp) / 1_048_576,
+                        'valid': False,
+                    })
+                    continue
+
                 if ('Period End Date' in df_peek.columns
                         and not df_peek['Period End Date'].isna().all()):
                     date_val = pd.to_datetime(df_peek['Period End Date'].dropna().iloc[0])

@@ -31,34 +31,37 @@ def load_and_merge_quarters(folder_path, log_callback=None):
     for file_path in excel_files:
         try:
             is_csv = file_path.lower().endswith('.csv')
-            if is_csv:
-                df_preview = pd.read_csv(file_path, nrows=20)
-            else:
-                df_preview = pd.read_excel(file_path, nrows=20)
-                
-            # Find the 'Period End Date' column
+            # Try skiprows 0-4 to handle files with blank/metadata rows
+            # before the real column headers (e.g. skiprows=2 for SAMPLE2.xlsx)
+            df_preview = None
+            working_skip = 0
+            for _skip in range(5):
+                try:
+                    if is_csv:
+                        _df = pd.read_csv(file_path, skiprows=_skip, nrows=20)
+                    else:
+                        _df = pd.read_excel(file_path, skiprows=_skip, nrows=20)
+                    if any('Period End Date' in str(c) for c in _df.columns):
+                        df_preview = _df
+                        working_skip = _skip
+                        break
+                except Exception:
+                    continue
+
+            if df_preview is None:
+                log(f"WARNING: Could not find 'Period End Date' header in {os.path.basename(file_path)} — skipping.")
+                continue
+
             date_col = next((c for c in df_preview.columns if 'Period End Date' in str(c)), None)
-            
-            if not date_col:
-                # If there's a skip row issue, try reading with skiprows=1
-                if is_csv:
-                    df_preview = pd.read_csv(file_path, skiprows=1, nrows=20)
-                else:
-                    df_preview = pd.read_excel(file_path, skiprows=1, nrows=20)
-                date_col = next((c for c in df_preview.columns if 'Period End Date' in str(c)), None)
-            
+
             if date_col and not df_preview[date_col].isna().all():
                 raw_date = df_preview[date_col].dropna().iloc[0]
                 parsed_date = pd.to_datetime(raw_date)
                 
-                # We need to know if this file needs skiprows=1 for full load
-                needs_skiprows = False
-                # A simple heuristic: if 'Item Desc' or '6. TOTAL' is in the first row without skip, it doesn't need it.
-                # But safer to just read the file fully later and check.
-                
                 file_date_map.append({
                     'path': file_path,
-                    'date': parsed_date
+                    'date': parsed_date,
+                    'skiprows': working_skip   # remember for full load
                 })
         except Exception as e:
             log(f"WARNING: Could not parse date from {os.path.basename(file_path)} — skipping. Reason: {e}")
@@ -96,14 +99,11 @@ def load_and_merge_quarters(folder_path, log_callback=None):
         try:
             # Try loading normally (Universal CSV Support)
             is_csv = path.lower().endswith('.csv')
+            skip = sf.get('skiprows', 0)   # use the skip value found during scan
             if is_csv:
-                df = pd.read_csv(path)
-                if 'Period End Date' not in df.columns:
-                    df = pd.read_csv(path, skiprows=1)
+                df = pd.read_csv(path, skiprows=skip)
             else:
-                df = pd.read_excel(path)
-                if 'Period End Date' not in df.columns:
-                    df = pd.read_excel(path, skiprows=1)
+                df = pd.read_excel(path, skiprows=skip)
                 
             df.columns = df.columns.astype(str).str.strip()
             
