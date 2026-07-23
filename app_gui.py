@@ -698,17 +698,17 @@ class App(ctk.CTk):
             try:
                 is_csv = fp.lower().endswith('.csv')
                 if is_csv:
-                    df_peek = pd.read_csv(fp, nrows=3)
+                    df_peek = pd.read_csv(fp, nrows=20)
                     if 'Period End Date' not in df_peek.columns:
-                        df_peek = pd.read_csv(fp, skiprows=1, nrows=3)
+                        df_peek = pd.read_csv(fp, skiprows=1, nrows=20)
                 else:
-                    df_peek = pd.read_excel(fp, nrows=3)
+                    df_peek = pd.read_excel(fp, nrows=20)
                     if 'Period End Date' not in df_peek.columns:
-                        df_peek = pd.read_excel(fp, skiprows=1, nrows=3)
+                        df_peek = pd.read_excel(fp, skiprows=1, nrows=20)
                         
                 if ('Period End Date' in df_peek.columns
                         and not df_peek['Period End Date'].isna().all()):
-                    date_val = pd.to_datetime(df_peek['Period End Date'].iloc[0])
+                    date_val = pd.to_datetime(df_peek['Period End Date'].dropna().iloc[0])
                     
                     # Auto-Rename Logic
                     ext = '.csv' if is_csv else '.xlsx'

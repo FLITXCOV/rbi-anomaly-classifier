@@ -32,9 +32,9 @@ def load_and_merge_quarters(folder_path, log_callback=None):
         try:
             is_csv = file_path.lower().endswith('.csv')
             if is_csv:
-                df_preview = pd.read_csv(file_path, nrows=5)
+                df_preview = pd.read_csv(file_path, nrows=20)
             else:
-                df_preview = pd.read_excel(file_path, nrows=5)
+                df_preview = pd.read_excel(file_path, nrows=20)
                 
             # Find the 'Period End Date' column
             date_col = next((c for c in df_preview.columns if 'Period End Date' in str(c)), None)
@@ -42,13 +42,13 @@ def load_and_merge_quarters(folder_path, log_callback=None):
             if not date_col:
                 # If there's a skip row issue, try reading with skiprows=1
                 if is_csv:
-                    df_preview = pd.read_csv(file_path, skiprows=1, nrows=5)
+                    df_preview = pd.read_csv(file_path, skiprows=1, nrows=20)
                 else:
-                    df_preview = pd.read_excel(file_path, skiprows=1, nrows=5)
+                    df_preview = pd.read_excel(file_path, skiprows=1, nrows=20)
                 date_col = next((c for c in df_preview.columns if 'Period End Date' in str(c)), None)
             
             if date_col and not df_preview[date_col].isna().all():
-                raw_date = df_preview[date_col].iloc[0]
+                raw_date = df_preview[date_col].dropna().iloc[0]
                 parsed_date = pd.to_datetime(raw_date)
                 
                 # We need to know if this file needs skiprows=1 for full load
